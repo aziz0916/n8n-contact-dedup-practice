@@ -26,6 +26,7 @@
       ],
       "id": "a7e14993-634b-457e-94ab-aea6b82586f9",
       "name": "讀取既有客戶",
+      "alwaysOutputData": true,
       "credentials": {
         "postgres": {
           "id": "qIAxg788YuoWIx63",
@@ -252,7 +253,7 @@
     "executionOrder": "v1",
     "binaryMode": "separate"
   },
-  "versionId": "2ea814bd-cdbd-4519-94a7-e0731cd19dbf",
+  "versionId": "5f47defd-679d-46bd-b90d-99f424b3143b",
   "meta": {
     "templateCredsSetupCompleted": true,
     "instanceId": "b2e3a503ed9b378e8383e36b208529089301fcb789e1d07f65084848065f0985"
