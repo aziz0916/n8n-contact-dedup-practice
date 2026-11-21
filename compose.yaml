@@ -1,0 +1,24 @@
+services:
+  n8n:
+    image: docker.n8n.io/n8nio/n8n:2.20.7
+    ports:
+      - "127.0.0.1:5682:5678"
+    environment:
+      - TZ=Asia/Taipei
+      - GENERIC_TIMEZONE=Asia/Taipei
+    volumes:
+      - n8n_data:/home/node/.n8n
+      - ./data:/home/node/.n8n-files
+
+  postgres:
+    image: postgres:16
+    environment:
+      - POSTGRES_DB=contact_practice
+      - POSTGRES_USER=contact_user
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+volumes:
+  n8n_data:
+  postgres_data:

@@ -1,0 +1,262 @@
+{
+  "name": "模擬案件_客戶名單去重",
+  "nodes": [
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        16,
+        -96
+      ],
+      "id": "b7a20dc0-6959-474f-9659-4ec0d64852af",
+      "name": "When clicking ‘Execute workflow’"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT id, name, email\nFROM contacts\nORDER BY id;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        224,
+        112
+      ],
+      "id": "a7e14993-634b-457e-94ab-aea6b82586f9",
+      "name": "讀取既有客戶",
+      "credentials": {
+        "postgres": {
+          "id": "qIAxg788YuoWIx63",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "fileSelector": "/home/node/.n8n-files/new-contacts.csv",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.readWriteFile",
+      "typeVersion": 1.1,
+      "position": [
+        224,
+        -96
+      ],
+      "id": "313f5719-725b-4f65-bbd6-0d7371b28642",
+      "name": "Read/Write Files from Disk"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1.1,
+      "position": [
+        640,
+        -96
+      ],
+      "id": "b3f336a3-913d-4db8-a1b4-0733636913a4",
+      "name": "解析新客戶名單"
+    },
+    {
+      "parameters": {
+        "mode": "chooseBranch"
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        928,
+        -80
+      ],
+      "id": "96bf1886-0a8f-4851-aa6c-57e241d5874a",
+      "name": "Merge"
+    },
+    {
+      "parameters": {
+        "jsCode": "const newContacts = $input.all();\nconst existingContacts = $('讀取既有客戶').all();\n\n// 將既有客戶的 Email 整理成方便比對的集合\nconst existingEmails = new Set(\n  existingContacts.map((item) =>\n    String(item.json.email ?? '').trim().toLowerCase()\n  )\n);\n\n// 記錄本次名單中已處理過的有效 Email\nconst seenEmails = new Set();\n\n// 這是基本格式檢查，不代表信箱一定存在\nconst emailPattern = /^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/;\n\nreturn newContacts.map((item) => {\n  const originalEmail = item.json.email ?? '';\n  const normalizedEmail = String(originalEmail).trim().toLowerCase();\n\n  let status;\n\n  if (!emailPattern.test(normalizedEmail)) {\n    status = '資料異常';\n  } else if (existingEmails.has(normalizedEmail)) {\n    status = '既有客戶';\n  } else if (seenEmails.has(normalizedEmail)) {\n    status = '本次名單重複';\n  } else {\n    status = '新客戶';\n    seenEmails.add(normalizedEmail);\n  }\n\n  return {\n    json: {\n      ...item.json,\n      email: originalEmail,\n      normalized_email: normalizedEmail,\n      status,\n    },\n  };\n});"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1136,
+        -80
+      ],
+      "id": "6ecca627-ecb9-4a60-a088-6e1d5edc644d",
+      "name": "判斷名單狀態"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "n8n-nodes-base.convertToFile",
+      "typeVersion": 1.1,
+      "position": [
+        1344,
+        -80
+      ],
+      "id": "35d50ac2-642d-42ce-a430-424b3fcaf79a",
+      "name": "Convert to File"
+    },
+    {
+      "parameters": {
+        "operation": "write",
+        "fileName": "/home/node/.n8n-files/contact-results.csv",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.readWriteFile",
+      "typeVersion": 1.1,
+      "position": [
+        1552,
+        -80
+      ],
+      "id": "658d7045-4901-421c-8e70-5a2969e51c9f",
+      "name": "Read/Write Files from Disk1"
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\n\nconst counts = {\n  total: items.length,\n  existing: 0,\n  new: 0,\n  duplicate_in_file: 0,\n  invalid: 0,\n};\n\nfor (const item of items) {\n  switch (item.json.status) {\n    case '既有客戶':\n      counts.existing++;\n      break;\n    case '新客戶':\n      counts.new++;\n      break;\n    case '本次名單重複':\n      counts.duplicate_in_file++;\n      break;\n    case '資料異常':\n      counts.invalid++;\n      break;\n  }\n}\n\nreturn [{ json: counts }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1344,
+        96
+      ],
+      "id": "12506870-e63e-419c-aa4c-611381024eaa",
+      "name": "統計名單結果"
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\n\nif (items.length !== 1 || !items[0].binary?.data) {\n  throw new Error('無法取得 CSV 檔案，請確認讀取檔案節點的輸出。');\n}\n\nconst buffer = await this.helpers.getBinaryDataBuffer(0, 'data');\nconst content = buffer.toString('utf8');\n\n// 移除可能存在的 UTF-8 BOM，並取得第一行標題\nconst headerLine = content.replace(/^\\uFEFF/, '').split(/\\r?\\n/)[0];\n\n// 第一版使用簡單的逗號分隔欄位名稱\nconst headers = headerLine.split(',').map((header) => header.trim());\n\nif (!headers.includes('email')) {\n  throw new Error('CSV 缺少必要的 email 欄位，請檢查標題列。');\n}\n\n// 保留原始 Binary，讓下一個節點繼續解析\nreturn items;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        432,
+        -96
+      ],
+      "id": "227b80a2-f2e0-4928-925c-e7bf051ad09e",
+      "name": "檢查 CSV 欄位"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "When clicking ‘Execute workflow’": {
+      "main": [
+        [
+          {
+            "node": "Read/Write Files from Disk",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "讀取既有客戶",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read/Write Files from Disk": {
+      "main": [
+        [
+          {
+            "node": "檢查 CSV 欄位",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "解析新客戶名單": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "讀取既有客戶": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Merge": {
+      "main": [
+        [
+          {
+            "node": "判斷名單狀態",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "判斷名單狀態": {
+      "main": [
+        [
+          {
+            "node": "統計名單結果",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Convert to File",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Convert to File": {
+      "main": [
+        [
+          {
+            "node": "Read/Write Files from Disk1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "統計名單結果": {
+      "main": [
+        []
+      ]
+    },
+    "檢查 CSV 欄位": {
+      "main": [
+        [
+          {
+            "node": "解析新客戶名單",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "2ea814bd-cdbd-4519-94a7-e0731cd19dbf",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "b2e3a503ed9b378e8383e36b208529089301fcb789e1d07f65084848065f0985"
+  },
+  "id": "XpSEbFfaYVZIqteS",
+  "tags": []
+}
