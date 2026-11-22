@@ -19,6 +19,11 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
 
+  mock-site:
+    image: nginx:1.27-alpine
+    volumes:
+      - ./mock-site:/usr/share/nginx/html:ro
+
 volumes:
   n8n_data:
   postgres_data:
